@@ -1,0 +1,14 @@
+{
+  "name": "jwplayer-management-api-v2-library",
+  "version": "1.0.0",
+  "description": "NodeJs interface to the JWPlayer.com management api v2",
+  "main": "jwplayer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Michael Wood",
+  "license": "SEE LICENSE IN license.md",
+  "dependencies": {
+    "axios": "^0.27.2"
+  }
+}
