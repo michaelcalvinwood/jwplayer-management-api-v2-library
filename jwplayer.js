@@ -50,10 +50,48 @@ const createManualPlaylist = mediaList => {
     })
 }
 
+const getPlaylistMetaData = playlistId => {
+    return new Promise((resolve, reject) => {
+        const request = {
+            url: `https://api.jwplayer.com/v2/sites/${siteId}/playlists/${playlistId}`,
+            method: 'get',
+            headers: {
+                Authorization: `Bearer ${secret}`
+            }
+        }
+        axios(request)
+        .then(response => resolve(response.data))
+        .catch(error => reject(error))
+    })
+}
+
+const getPlaylist = playlistId => {
+    return new Promise((resolve, reject) => {
+        const request = {
+            url: `https://cdn.jwplayer.com/v2/playlists/${playlistId}`,
+            method: 'get'
+        }
+        axios(request)
+        .then(response => resolve(response.data))
+        .catch(error => reject(error))
+    })
+}
+
+
+
+
+const jwplayer = () => {
+    
+}
+
 // getMediaList()
 // .then(data => console.log(data))
 // .catch(err => console.error(err))
 
-createManualPlaylist(['cnLuyfOm', 'zb6VSIAe'])
+// createManualPlaylist(['cnLuyfOm', 'zb6VSIAe'])
+// .then(response => console.log(response))
+// .catch(error => console.error(error))
+
+getPlaylist('8vihlgXx')
 .then(response => console.log(response))
 .catch(error => console.error(error))
