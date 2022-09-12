@@ -72,8 +72,14 @@ const getPlaylist = playlistId => {
             method: 'get'
         }
         axios(request)
-        .then(response => resolve(response.data))
-        .catch(error => reject(error))
+        .then(response => {
+            //console.log(response.data);
+            resolve(response.data)
+        })
+        .catch(error => {
+            console.error(error);
+            reject(error);
+        })
     })
 }
 
@@ -106,6 +112,43 @@ const generate24HourContent = async (inputPlaylistId, newPlaylistTitle) => {
     console.log(`${newPlaylistTitle} has been created`);
 }
 
+const generateDayTvPlaylist = async (includePlaylists, excludePlaylists = [], prescheduledEvents = []) => {
+    let mediaToPlay = new Set();
+
+    // add media from included playlists
+    let mediaList, playlist;
+    for (let i = 0; i < includePlaylists.length; ++i) {
+        try {
+            mediaList = await getPlaylist(includePlaylists[i]);
+            playlist = mediaList.playlist;
+            console.log(i, playlist.length);
+            for (let j = 0; j < playlist.length; ++j) mediaToPlay.add(playlist[j]);
+        } catch (e) { console.error(e); }
+    }
+
+    // remove media from excluded playlists
+    for (let i = 0; i < excludePlaylists.length; ++i) {
+        try {
+            mediaList = await getPlaylist(excludePlaylists[i]);
+            playlist = mediaList.playlist;
+            console.log(i, playlist.length);
+            for (let j = 0; j < mediaList.length; ++j) mediaToPlay.delete(mediaList[j]);
+        } catch (e) { console.error(e); }
+    }
+
+    // convert remaining media set to array
+    let listToPlay = Array.from(mediaToPlay);
+
+    // sort array from longest to shortest
+    let longPlay = listToPlay.sort((a, b) => b.duration - a.duration);
+
+    console.log(longPlay[0]);
+
+
+
+
+}
+
 // getMediaList()
 // .then(data => console.log(data))
 // .catch(err => console.error(err))
@@ -118,4 +161,6 @@ const generate24HourContent = async (inputPlaylistId, newPlaylistTitle) => {
 // .then(response => console.log(response))
 // .catch(error => console.error(error))
 
-generate24HourContent('8vihlgXx', 'flipper');
+//generate24HourContent('8vihlgXx', 'flipper');
+
+generateDayTvPlaylist(['8vihlgXx']);
