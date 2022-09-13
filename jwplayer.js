@@ -2,11 +2,69 @@
 
 require('dotenv').config();
 const axios = require('axios');
+const luxon = require('luxon');
 
 const secret = process.env.SECRET;
 const siteId = process.env.SITE_ID;
 
+// 90 minutes: 5400
+
+const schedule = [
+    {
+        title: '30 minute example',
+        date: '2022-09-13',
+        mediaId: 'live',
+        channel: 'JUELnFMu',
+        time: '18:00:00',
+        length: '00:30:00',
+        description: "An example of 30 minutes",
+        img: "https://media.istockphoto.com/photos/dog-watching-tv-on-the-couch-picture-id680810342?k=20&m=680810342&s=612x612&w=0&h=wQVeNcnq0CIqpGK88zA-pqmzbyK_6diiHR7kAq5PbxQ="
+    },
+    {
+        title: '90 minute example',
+        date: '2022-09-13',
+        mediaId: 'live',
+        channel: 'JUELnFMu',
+        time: '14:00:00',
+        length: '1:30:00',
+        description: "An example of 90 minutes",
+        img: "https://media.istockphoto.com/photos/dog-watching-tv-on-the-couch-picture-id680810342?k=20&m=680810342&s=612x612&w=0&h=wQVeNcnq0CIqpGK88zA-pqmzbyK_6diiHR7kAq5PbxQ="
+    },
+    {
+        title: '90 minute tomorrow example',
+        date: '2022-09-14',
+        mediaId: 'live',
+        channel: 'JUELnFMu',
+        time: '14:00:00',
+        length: '1:30:00',
+        description: "An example of 90 minutes",
+        img: "https://media.istockphoto.com/photos/dog-watching-tv-on-the-couch-picture-id680810342?k=20&m=680810342&s=612x612&w=0&h=wQVeNcnq0CIqpGK88zA-pqmzbyK_6diiHR7kAq5PbxQ="
+    },
+    {
+        title: '120 minute example',
+        date: '2022-09-13',
+        mediaId: 'live',
+        channel: 'JUELnFMu',
+        time: '09:00',
+        length: '02:00:00',
+        description: "An example of 120 minutes",
+        img: "https://media.istockphoto.com/photos/dog-watching-tv-on-the-couch-picture-id680810342?k=20&m=680810342&s=612x612&w=0&h=wQVeNcnq0CIqpGK88zA-pqmzbyK_6diiHR7kAq5PbxQ="
+    },
+
+]
+
 console.log(siteId, secret);
+
+function convertHHMMSSToSeconds(HHMMSS) {
+    let parts = HHMMSS.split(':');
+    return Number(parts[0]) * 60 * 60 + Number(parts[1]) * 60 + Number(parts[2]);
+}
+
+const getNext15MinuteTimeSlot = (seconds) => {
+    let remainder = seconds % 900;
+    if (remainder === 0) return seconds;
+    return 900 - remainder + seconds;
+}
 
 const getMediaList = (pageNumber = 1, numPerPage = 10000) => {
     return new Promise((resolve, reject) => {
@@ -112,7 +170,26 @@ const generate24HourContent = async (inputPlaylistId, newPlaylistTitle) => {
     console.log(`${newPlaylistTitle} has been created`);
 }
 
-const generateDayTvPlaylist = async (includePlaylists, excludePlaylists = [], prescheduledEvents = []) => {
+const addScheduleEvents = (date, events) => {
+    let scheduledEvents = [];
+
+    // get date
+    let datetime = luxon.DateTime.fromFormat(date, 'yyyy-MM-dd', { zone: 'utc'});
+    let offsetMinutes = luxon.DateTime.now().offset;
+    let secondsConvert = offsetMinutes * 60 * -1;
+    
+    for (let i = 0; i < events.length; ++i) {
+        if (events[i].date !== date) continue;
+        events[i].start =  convertHHMMSSToSeconds(events[i].time) + secondsConvert;
+        events[i].ts = datetime.ts + events[i].start * 1000;
+        events[i].duration =  convertHHMMSSToSeconds(events[i].length);
+        scheduledEvents.push(events[i]);        
+    }
+
+    return scheduledEvents.sort((a, b) => b.start - a.start);
+}
+
+const addFeaturedMedia = async (startSeconds, stopSeconds, curSchedule, includePlaylists, excludePlaylists, durationExclusion = 14 * 60) => {
     let mediaToPlay = new Set();
 
     // add media from included playlists
@@ -122,7 +199,7 @@ const generateDayTvPlaylist = async (includePlaylists, excludePlaylists = [], pr
             mediaList = await getPlaylist(includePlaylists[i]);
             playlist = mediaList.playlist;
             console.log(i, playlist.length);
-            for (let j = 0; j < playlist.length; ++j) mediaToPlay.add(playlist[j]);
+            for (let j = 0; j < playlist.length; ++j) if (playlist[j].duration >= durationExclusion) mediaToPlay.add(playlist[j]);
         } catch (e) { console.error(e); }
     }
 
@@ -139,14 +216,77 @@ const generateDayTvPlaylist = async (includePlaylists, excludePlaylists = [], pr
     // convert remaining media set to array
     let listToPlay = Array.from(mediaToPlay);
 
-    // sort array from longest to shortest
-    let longPlay = listToPlay.sort((a, b) => b.duration - a.duration);
+    // TODO: If list to play duration < 25 hours add listtoplay to listtoplay until > 25 hours
 
-    console.log(longPlay[0]);
+    let newSchedule = [], endingTime = 0;
 
+    console.log('listToPlay.length', listToPlay.length, listToPlay[0]);
 
+    if (curSchedule.length) endingTime = curSchedule[0].start - 1;
+    else endingTime = stopSeconds;
 
+    let nextScheduleEventIndex = 0;
+    
+    let debugDecrement = 100;
 
+    while (startSeconds < stopSeconds) {
+        let prevSeconds = startSeconds;
+        startSeconds = getNext15MinuteTimeSlot(startSeconds);
+        console.log('prevSeconds, next15MinuteTimeSlot, newSchedule', prevSeconds, startSeconds, newSchedule);
+
+        console.log('debugDecrement', debugDecrement);
+        --debugDecrement; if (!debugDecrement) return;
+        
+        if (nextScheduleEventIndex < curSchedule.length) console.log('next start, startSeconds', curSchedule[nextScheduleEventIndex].start, startSeconds);
+
+        if (nextScheduleEventIndex < curSchedule.length && curSchedule[nextScheduleEventIndex].start <= startSeconds) {
+            newSchedule.push(curSchedule[nextScheduleEventIndex]);
+            startSeconds += curSchedule[nextScheduleEventIndex].duration;
+            ++nextScheduleEventIndex;
+            if (nextScheduleEventIndex < curSchedule.length) endingTime = curSchedule[nextScheduleEventIndex].start - 1;
+            else endingTime = stopSeconds;
+        } else {
+            let numSecondstoFill = endingTime - startSeconds;
+            console.log('numSecondsToFill', numSecondstoFill);
+            let index = -1;
+            for (let i = 0; i < listToPlay.length; ++i) {
+                if (listToPlay[i].duration <= numSecondstoFill) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index !== -1) {
+                let next = listToPlay.splice(index, 1)[0];
+                next.start = startSeconds;
+                newSchedule.push(next);
+                startSeconds += next.duration;
+            } else {
+                // we don't have any videos short enough therefore the timeslot is empty
+                startSeconds += numSecondstoFill;
+            }
+        }
+    }
+
+    console.log('startSeconds, stopSeconds', startSeconds, stopSeconds);
+}
+
+const generateDayTvPlaylist = async (date, start, stop, scheduledEvents, includePlaylists, excludePlaylists = []) => {
+    let dayPlayList = addScheduleEvents(date, scheduledEvents);
+    
+    let startEstSeconds = convertHHMMSSToSeconds(start);
+    let stopEstSeconds = convertHHMMSSToSeconds(stop);
+    let offsetMinutes = luxon.DateTime.now().offset;
+    let secondsConvert = offsetMinutes * 60 * -1;
+
+    let startUtcSeconds = startEstSeconds + secondsConvert;
+    let stopUtcSeconds = stopEstSeconds + secondsConvert;
+
+    addFeaturedMedia(startUtcSeconds, stopUtcSeconds, dayPlayList, includePlaylists, excludePlaylists);
+    
+    console.log(dayPlayList);
+    return;
+
+    
 }
 
 // getMediaList()
@@ -163,4 +303,4 @@ const generateDayTvPlaylist = async (includePlaylists, excludePlaylists = [], pr
 
 //generate24HourContent('8vihlgXx', 'flipper');
 
-generateDayTvPlaylist(['8vihlgXx']);
+generateDayTvPlaylist('2022-09-14', '06:00:00', '23:59:00', schedule, ['8vihlgXx']);
